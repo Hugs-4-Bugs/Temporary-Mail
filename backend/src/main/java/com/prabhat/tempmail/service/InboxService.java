@@ -2,6 +2,7 @@ package com.prabhat.tempmail.service;
 
 import com.prabhat.tempmail.model.Inbox;
 import com.prabhat.tempmail.repository.InboxRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -11,21 +12,19 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class InboxService {
     private final InboxRepository inboxRepository;
+    private final EmailService emailService;
 
     @Value("${tempmail.domain:prabhat.temp}")
     private String mailDomain;
     @Value("${tempmail.expiry.minutes:10}")
     private int inboxExpiryMinutes;
 
-    public InboxService(InboxRepository inboxRepository) {
-        this.inboxRepository = inboxRepository;
-    }
-
     public Inbox createInbox() {
         UUID id = UUID.randomUUID();
-        String randomEmail = id.toString().replaceAll("-","") + "@" + mailDomain;
+        String randomEmail = id.toString().replaceAll("-", "") + "@" + mailDomain;
         Instant now = Instant.now();
         Instant expiresAt = now.plus(inboxExpiryMinutes, ChronoUnit.MINUTES);
         Inbox inbox = Inbox.builder()
@@ -34,7 +33,11 @@ public class InboxService {
                 .createdAt(now)
                 .expiresAt(expiresAt)
                 .build();
-        return inboxRepository.save(inbox);
+        Inbox savedInbox = inboxRepository.save(inbox);
+        // Create two sample emails for demo/test upon inbox creation
+        emailService.saveEmail(id, "welcome@temp-mail.org", "Welcome to Temporary Mail!", "<p>This is a demo welcome email.</p><p>Enjoy your stay ✨</p>");
+        emailService.saveEmail(id, "news@temp-mail.org", "Get Started", "<b>Your inbox is ready to receive mails.</b><br>Use it anywhere!");
+        return savedInbox;
     }
 
     public Optional<Inbox> getInbox(UUID uuid) {
@@ -49,7 +52,7 @@ public class InboxService {
         Optional<Inbox> opt = inboxRepository.findById(uuid);
         if (opt.isEmpty()) return null;
         Inbox existing = opt.get();
-        String newEmail = UUID.randomUUID().toString().replaceAll("-","") + "@" + mailDomain;
+        String newEmail = UUID.randomUUID().toString().replaceAll("-", "") + "@" + mailDomain;
         existing.setEmailAddress(newEmail);
         // Reset expiry to now + expiryMinutes
         existing.setCreatedAt(Instant.now());
