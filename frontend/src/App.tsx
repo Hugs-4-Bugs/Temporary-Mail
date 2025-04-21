@@ -62,6 +62,12 @@ export default function App() {
   const [detailLoading, setDetailLoading] = useState(false);
   const detailPanelRef = useRef<HTMLDivElement>(null);
 
+  const [deleting, setDeleting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [changing, setChanging] = useState(false);
+
+  const [timeLeft, setTimeLeft] = useState<string>("");
+
   // Handle system theme changes (optional enhancement)
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -111,11 +117,83 @@ export default function App() {
       .catch(() => setDetailLoading(false));
   }, [selectedEmailId]);
 
+  // Countdown timer for inbox expiration
+  useEffect(() => {
+    if (!inbox?.expiresAt) {
+      setTimeLeft("");
+      return;
+    }
+    function updateCountdown() {
+      const now = new Date();
+      const expire = new Date(inbox.expiresAt);
+      const diff = Math.max(0, Math.floor((expire.getTime() - now.getTime()) / 1000));
+      if (diff <= 0) return setTimeLeft("Expired");
+      const min = String(Math.floor(diff/60)).padStart(2, "0");
+      const sec = String(diff%60).padStart(2, "0");
+      setTimeLeft(`Expires in ${min}:${sec}`);
+    }
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [inbox?.expiresAt]);
+
   const handleCopy = () => {
     if (inbox) {
       navigator.clipboard.writeText(inbox.address);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 1200);
+    }
+  };
+
+  const handleDeleteEmail = async (id: number) => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/email/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error('Failed to delete.');
+      // Remove from email list
+      setEmails(prev => prev.filter(email => email.id !== id));
+      setSelectedEmailId(null);
+      setEmailDetail(null);
+    } catch (err) {
+      alert('Failed to delete email.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!inbox) return;
+    setRefreshing(true);
+    try {
+      await fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/refresh`, { method: 'POST' });
+      // reload emails
+      setEmailsLoading(true);
+      const res = await fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/emails`);
+      const data = await res.json();
+      setEmails(data.filter((em: Email) => !em.deleted));
+    } catch {
+      alert('Failed to refresh inbox.');
+    } finally {
+      setRefreshing(false);
+      setEmailsLoading(false);
+    }
+  };
+
+  const handleChangeEmail = async () => {
+    if (!inbox) return;
+    setChanging(true);
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/change`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to change email');
+      const newInbox = await res.json();
+      setInbox(newInbox);
+      setEmails([]);
+      setSelectedEmailId(null);
+      setEmailDetail(null);
+    } catch {
+      alert('Failed to change email address.');
+    } finally {
+      setChanging(false);
     }
   };
 
@@ -146,11 +224,38 @@ export default function App() {
                 <Button variant="outline" size="icon" onClick={handleCopy}>
                   <CopyIcon className="w-4 h-4" />
                 </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleChangeEmail}
+                  disabled={changing}
+                  aria-label="Change email address"
+                >
+                  <svg viewBox="0 0 20 20" className={changing ? "animate-spin w-4 h-4" : "w-4 h-4"} fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.657 16.657A8 8 0 1 1 19 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M19 4v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  aria-label="Refresh inbox"
+                >
+                  <svg className={refreshing ? "animate-spin w-4 h-4" : "w-4 h-4"} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 4v5h.582M19 11c0 4.418-3.582 8-8 8a8 8 0 1 1 6.219-12.906" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </Button>
+                {timeLeft && (
+                  <span className={`text-xs ml-2 px-2 py-0.5 rounded ${timeLeft==="Expired" ? 'bg-red-100 text-red-600 dark:bg-red-900' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-100'} transition-all`}>
+                    {timeLeft}
+                  </span>
+                )}
               </div>
               {copySuccess && (
                 <span className="text-green-600 text-sm">Copied!</span>
               )}
-              {/* Refresh, Change address, Countdown coming next */}
               <div className="mt-4 w-full">
                 <div className="font-semibold text-lg mb-1">Inbox</div>
                 {emailsLoading && <div className="py-8 text-center">Loading messages...</div>}
@@ -204,6 +309,15 @@ export default function App() {
                     className="my-4 px-2 prose prose-zinc dark:prose-invert max-w-full overflow-x-auto"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(emailDetail.content) }}
                   />
+                  <div className="flex justify-end mt-4">
+                    <Button
+                      variant="destructive"
+                      disabled={deleting}
+                      onClick={() => handleDeleteEmail(emailDetail.id)}
+                    >
+                      {deleting ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  </div>
                 </>
               )}
             </div>
