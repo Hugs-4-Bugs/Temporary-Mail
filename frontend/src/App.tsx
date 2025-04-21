@@ -68,6 +68,10 @@ export default function App() {
 
   const [timeLeft, setTimeLeft] = useState<string>("");
 
+  // Live updates state and SSE ref
+  const [liveConnected, setLiveConnected] = useState(false);
+  const sseRef = useRef<EventSource | null>(null);
+
   // Handle system theme changes (optional enhancement)
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -99,6 +103,54 @@ export default function App() {
         setEmailsLoading(false);
       })
       .catch(() => setEmailsLoading(false));
+  }, [inbox]);
+
+  // Live email updates: SSE via /api/inbox/{uuid}/stream
+  useEffect(() => {
+    if (!inbox) return;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let closed = false;
+
+    function connect() {
+      if (sseRef.current) {
+        sseRef.current.close();
+      }
+      const sse = new EventSource(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/stream`);
+      sseRef.current = sse;
+
+      sse.onopen = () => {
+        setLiveConnected(true);
+      };
+      sse.onmessage = (event) => {
+        try {
+          const mail = JSON.parse(event.data);
+          setEmails((prev) => {
+            // Check for duplicate or deleted email
+            if (mail.deleted) return prev;
+            if (prev.some((e) => e.id === mail.id)) return prev;
+            return [mail, ...prev]; // prepend most recent
+          });
+        } catch (err) {
+          // ignore parse errors
+        }
+      };
+      sse.onerror = () => {
+        setLiveConnected(false);
+        if (!closed) {
+          // Try to reconnect in 2 seconds if unexpected close
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connect, 2000);
+        }
+      };
+    }
+    connect();
+
+    return () => {
+      closed = true;
+      setLiveConnected(false);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (sseRef.current) sseRef.current.close();
+    };
   }, [inbox]);
 
   // Fetch email detail when selectedEmailId changes
@@ -216,48 +268,70 @@ export default function App() {
         <CardContent>
           {loading && <div className="text-center my-8">Loading...</div>}
           {!loading && inbox && (
-            <div className="flex flex-col gap-4 items-center w-full">
-              <div className="flex gap-2 items-center">
-                <span className="font-mono text-lg text-zinc-800 dark:text-zinc-200 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded">
-                  {inbox.address}
-                </span>
-                <Button variant="outline" size="icon" onClick={handleCopy}>
-                  <CopyIcon className="w-4 h-4" />
-                </Button>
+            <>
+              <div className="w-full flex flex-col items-center gap-2 p-3">
+                <div className="text-lg font-bold text-center">Your Disposable Email Address</div>
+                <div className="text-sm text-muted-foreground text-center mb-2">Use this address anywhere to receive email. It’s temporary and private.</div>
+                <div className="flex gap-2 items-center w-full max-w-full justify-center">
+                  <span className="font-mono text-lg text-zinc-800 dark:text-zinc-200 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 rounded-lg shadow border border-zinc-200 dark:border-zinc-700 break-all select-all min-w-0 flex-1 text-center">
+                    {inbox.address}
+                  </span>
+                  <Button variant="secondary" size="icon" onClick={handleCopy} className="shrink-0" aria-label="Copy email address">
+                    <CopyIcon className="w-5 h-5" />
+                  </Button>
+                  {/* Live badge */}
+                  <span
+                    className="ml-1 flex items-center select-none"
+                    title={liveConnected ? 'Live: Connected' : 'Live: Disconnected. Reconnecting…'}
+                  >
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full mr-1 ${liveConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}
+                      aria-label={liveConnected ? 'Live connection' : 'Disconnected'}
+                    />
+                    <span className={`text-xs font-medium ${liveConnected ? 'text-green-600' : 'text-gray-400'}`}>Live</span>
+                  </span>
+                </div>
                 <Button
-                  variant="outline"
-                  size="icon"
+                  className="mt-2 font-semibold w-fit rounded px-4 py-2"
                   onClick={handleChangeEmail}
                   disabled={changing}
-                  aria-label="Change email address"
+                  variant="default"
+                  aria-label="Generate new disposable address"
                 >
-                  <svg viewBox="0 0 20 20" className={changing ? "animate-spin w-4 h-4" : "w-4 h-4"} fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.657 16.657A8 8 0 1 1 19 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M19 4v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                  aria-label="Refresh inbox"
-                >
-                  <svg className={refreshing ? "animate-spin w-4 h-4" : "w-4 h-4"} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 4v5h.582M19 11c0 4.418-3.582 8-8 8a8 8 0 1 1 6.219-12.906" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                  {changing ? (
+                    <svg viewBox="0 0 20 20" className="animate-spin w-4 h-4 inline-block mr-2 align-middle" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M17.657 16.657A8 8 0 1 1 19 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M19 4v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 inline-block mr-2 align-middle" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 5V3m0 2c3.866 0 7 3.134 7 7a7 7 0 1 1-7-7Zm7 7h2m-2 0h-2m2 0a7.001 7.001 0 1 1-13.856 1M5 12H3m2 0h2m12 0c0 3.866-3.134 7-7 7V21m0-2v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                  Generate New Address
                 </Button>
                 {timeLeft && (
-                  <span className={`text-xs ml-2 px-2 py-0.5 rounded ${timeLeft==="Expired" ? 'bg-red-100 text-red-600 dark:bg-red-900' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-100'} transition-all`}>
-                    {timeLeft}
-                  </span>
+                  <span className="text-xs mt-2 text-zinc-500 dark:text-zinc-400">{timeLeft}</span>
                 )}
               </div>
               {copySuccess && (
-                <span className="text-green-600 text-sm">Copied!</span>
+                <span className="text-green-600 text-sm block text-center">Copied!</span>
               )}
               <div className="mt-4 w-full">
-                <div className="font-semibold text-lg mb-1">Inbox</div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-semibold text-lg">Inbox</div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                    aria-label="Refresh inbox"
+                  >
+                    <svg className={refreshing ? "animate-spin w-4 h-4" : "w-4 h-4"} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 4v5h.582M19 11c0 4.418-3.582 8-8 8a8 8 0 1 1 6.219-12.906" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </Button>
+                </div>
                 {emailsLoading && <div className="py-8 text-center">Loading messages...</div>}
                 {!emailsLoading && emails.length === 0 && <div className="py-8 text-zinc-500 text-center">No emails yet.</div>}
                 {!emailsLoading && emails.length > 0 && (
@@ -279,7 +353,7 @@ export default function App() {
                   </ul>
                 )}
               </div>
-            </div>
+            </>
           )}
         </CardContent>
 
