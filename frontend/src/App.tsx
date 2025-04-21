@@ -98,6 +98,8 @@ export default function App() {
         const data = await res.json();
         console.log("Created inbox:", data);
         setDebugApiResult(`Success: ${JSON.stringify(data)}`);
+
+        // Ensure we're using the correct property names from the API response
         setInbox({
           uuid: data.id,
           address: data.emailAddress,
@@ -133,7 +135,7 @@ export default function App() {
     setEmailsLoading(true);
     setApiError(null);
 
-    fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/emails`)
+    fetch(`${BACKEND_BASE_URL}/inbox/${encodeURIComponent(inbox.uuid)}/emails`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch emails");
         return res.json();
@@ -165,9 +167,8 @@ export default function App() {
       }
 
       console.log("Connecting to SSE...");
-      // Add null check for inbox.uuid
       const sse = new EventSource(
-        `${BACKEND_BASE_URL}/inbox/${inbox?.uuid}/stream`
+        `${BACKEND_BASE_URL}/inbox/${encodeURIComponent(inbox.uuid)}/stream`
       );
       sseRef.current = sse;
 
@@ -247,7 +248,7 @@ export default function App() {
     setDetailLoading(true);
     setApiError(null);
 
-    fetch(`${BACKEND_BASE_URL}/email/${selectedEmailId}`)
+    fetch(`${BACKEND_BASE_URL}/email/${encodeURIComponent(selectedEmailId)}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch email details");
         return res.json();
@@ -267,7 +268,7 @@ export default function App() {
   const handleDeleteEmail = async (id: number) => {
     setApiError(null);
     try {
-      const res = await fetch(`${BACKEND_BASE_URL}/email/${id}`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/email/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete email");
@@ -299,13 +300,13 @@ export default function App() {
     setEmailsLoading(true);
 
     try {
-      await fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/refresh`, {
+      await fetch(`${BACKEND_BASE_URL}/inbox/${encodeURIComponent(inbox.uuid)}/refresh`, {
         method: "POST",
       });
 
       // reload emails
       const res = await fetch(
-        `${BACKEND_BASE_URL}/inbox/${inbox.uuid}/emails`
+        `${BACKEND_BASE_URL}/inbox/${encodeURIComponent(inbox.uuid)}/emails`
       );
       if (!res.ok) throw new Error("Failed to refresh emails");
 
@@ -328,7 +329,7 @@ export default function App() {
 
     try {
       const res = await fetch(
-        `${BACKEND_BASE_URL}/inbox/${inbox.uuid}/change`,
+        `${BACKEND_BASE_URL}/inbox/${encodeURIComponent(inbox.uuid)}/change`,
         { method: "POST" }
       );
       if (!res.ok) throw new Error("Failed to change email");
@@ -425,7 +426,6 @@ export default function App() {
 
             {!loading && inbox && (
               <div className={`flex flex-col ${!isMobile ? 'lg:flex-row' : ''} gap-6`}>
-                {/* Mobile View Handler */}
                 {isMobile && (
                   <>
                     {mobileView === 'inbox' ? (

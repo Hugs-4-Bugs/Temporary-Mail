@@ -3,24 +3,37 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const bodyParser = require('body-parser');
 
+console.log('Starting mock backend server...');
+
 const app = express();
 const PORT = 8080;
 
 // Middleware
-// Enhanced CORS configuration to allow all origins during development
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+console.log('CORS middleware configured');
+
 app.use(bodyParser.json());
+console.log('Body parser middleware configured');
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  next();
+});
+console.log('Request logging middleware configured');
 
 // In-memory database
 const inboxes = {};
 const emails = {};
+console.log('In-memory database initialized');
 
 // Root API endpoint
 app.get('/', (req, res) => {
+  console.log('Root endpoint accessed');
   res.json({
     message: 'Temporary Mail API - Use /api endpoints for service functionality',
     status: 'online',
@@ -209,22 +222,27 @@ const createDemoEmails = (inboxId) => {
 // Routes
 // Create new inbox
 app.post('/api/inbox', (req, res) => {
-  const id = uuidv4();
-  const emailAddress = generateEmail();
-  const expiresAt = getExpiryTime();
+  try {
+    const id = uuidv4();
+    const emailAddress = generateEmail();
+    const expiresAt = getExpiryTime();
 
-  const inbox = {
-    id,
-    emailAddress,
-    createdAt: new Date().toISOString(),
-    expiresAt
-  };
+    const inbox = {
+      id,
+      emailAddress,
+      createdAt: new Date().toISOString(),
+      expiresAt
+    };
 
-  inboxes[id] = inbox;
-  createDemoEmails(id);
+    inboxes[id] = inbox;
+    createDemoEmails(id);
 
-  console.log(`Created inbox: ${emailAddress}`);
-  res.json(inbox);
+    console.log(`Created inbox: ${emailAddress}`);
+    res.json(inbox);
+  } catch (error) {
+    console.error('Error creating inbox:', error);
+    res.status(500).json({ error: 'Failed to create inbox' });
+  }
 });
 
 // Get inbox by ID
@@ -452,6 +470,16 @@ app.get('/api/email/:id/otp-status', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Mock backend server running on http://localhost:${PORT}`);
-});
+try {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Mock backend server running on http://0.0.0.0:${PORT}`);
+    console.log('Server started successfully');
+  });
+
+  // Add error handling for the server
+  server.on('error', (error) => {
+    console.error('Server error:', error);
+  });
+} catch (error) {
+  console.error('Failed to start server:', error);
+}
