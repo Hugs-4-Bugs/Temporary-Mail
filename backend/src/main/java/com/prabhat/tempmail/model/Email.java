@@ -22,6 +22,9 @@ public class Email {
     @Column(nullable = false)
     private String sender;
 
+    @Column
+    private String recipient;
+
     @Column(nullable = false)
     private String subject;
 
@@ -31,4 +34,29 @@ public class Email {
 
     @Column(nullable = false)
     private Instant receivedAt;
+
+    @Column
+    private String otp;
+
+    @Column
+    private Instant otpExpiresAt;
+
+    @Column(nullable = false)
+    private boolean deleted = false;
+
+    @Transient
+    public boolean isOtpExpired() {
+        if (otpExpiresAt == null) return true;
+        return Instant.now().isAfter(otpExpiresAt);
+    }
+
+    @Transient
+    public String getFrom() {
+        return sender;
+    }
+
+    @Transient
+    public String getTo() {
+        return recipient;
+    }
 }

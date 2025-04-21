@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tempmail-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tempmail
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - tempmail-network
+
+  frontend:
+    image: oven/bun:1.0
+    container_name: tempmail-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "bun install && bun run dev"
+    ports:
+      - "5173:5173"
+    networks:
+      - tempmail-network
+    environment:
+      - HOST=0.0.0.0
+      - PORT=5173
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:8080/api
+
+networks:
+  tempmail-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
