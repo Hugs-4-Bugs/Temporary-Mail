@@ -1,0 +1,9 @@
+{
+  "name": "temporary-mail-functions",
+  "version": "1.0.0",
+  "description": "Netlify functions for Temporary Mail Service",
+  "main": "index.js",
+  "dependencies": {
+    "uuid": "^11.1.0"
+  }
+}

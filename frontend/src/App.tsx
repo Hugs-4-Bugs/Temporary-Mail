@@ -6,6 +6,7 @@ import { EmailList, EmailItem } from "@/components/EmailList";
 import { EmailAddressDisplay } from "@/components/EmailAddressDisplay";
 import { AlertCircle } from "lucide-react";
 
+// Use this for local development
 const BACKEND_BASE_URL = "/api";
 
 interface Inbox {
@@ -30,8 +31,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("theme") === "dark" ||
-        (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      return (
+        localStorage.getItem("theme") === "dark" ||
+        (window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      );
     }
     return false;
   });
@@ -51,6 +55,9 @@ export default function App() {
   const [liveConnected, setLiveConnected] = useState(false);
   const sseRef = useRef<EventSource | null>(null);
 
+  // Debug state
+  const [debugApiResult, setDebugApiResult] = useState<string>("");
+
   // Handle system theme changes
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -60,33 +67,43 @@ export default function App() {
   // Fetch/generate inbox on mount
   useEffect(() => {
     setApiError(null);
+    console.log("Fetching inbox...", `${BACKEND_BASE_URL}/inbox`);
+
     fetch(`${BACKEND_BASE_URL}/inbox`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     })
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to create inbox");
+        if (!res.ok) {
+          console.error("Failed to create inbox", res.status, res.statusText);
+          setDebugApiResult(`Error ${res.status}: ${res.statusText}`);
+          throw new Error(`Failed to create inbox: ${res.status} ${res.statusText}`);
+        }
         return res.json();
       })
       .then((data) => {
         console.log("Created inbox:", data);
+        setDebugApiResult(`Success: ${JSON.stringify(data)}`);
         setInbox({
           uuid: data.id,
           address: data.emailAddress,
-          expiresAt: data.expiresAt
+          expiresAt: data.expiresAt,
         });
         setLoading(false);
       })
       .catch((err) => {
         console.error("Error creating inbox:", err);
-        setApiError("Could not create a temporary email inbox. Please try again later.");
+        setDebugApiResult(`Error: ${err.message}`);
+        setApiError(
+          "Could not create a temporary email inbox. Please try again later."
+        );
         setLoading(false);
       });
   }, []);
 
   // Fetch emails when inbox loaded
   useEffect(() => {
-    if (!inbox) return;
+    if (!inbox || !inbox.uuid) return;
 
     setEmailsLoading(true);
     setApiError(null);
@@ -110,7 +127,7 @@ export default function App() {
 
   // Live email updates: SSE via /api/inbox/{uuid}/stream
   useEffect(() => {
-    if (!inbox) return;
+    if (!inbox || !inbox.uuid) return;
 
     let reconnectTimeout: NodeJS.Timeout | null = null;
     let closed = false;
@@ -121,7 +138,10 @@ export default function App() {
       }
 
       console.log("Connecting to SSE...");
-      const sse = new EventSource(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/stream`);
+      // Add null check for inbox.uuid
+      const sse = new EventSource(
+        `${BACKEND_BASE_URL}/inbox/${inbox?.uuid}/stream`
+      );
       sseRef.current = sse;
 
       sse.onopen = () => {
@@ -134,6 +154,20 @@ export default function App() {
         try {
           console.log("SSE message received:", event.data);
           const mail = JSON.parse(event.data);
+
+          // Special handling for the initial connection message
+          if (mail.connected) {
+            console.log("SSE connection confirmed");
+            if (mail.initialEmail) {
+              setEmails((prev) => {
+                if (mail.initialEmail.deleted) return prev;
+                if (prev.some((e) => e.id === mail.initialEmail.id)) return prev;
+                return [mail.initialEmail, ...prev]; // prepend most recent
+              });
+            }
+            return;
+          }
+
           setEmails((prev) => {
             // Check for duplicate or deleted email
             if (mail.deleted) return prev;
@@ -197,16 +231,18 @@ export default function App() {
   const handleDeleteEmail = async (id: number) => {
     setApiError(null);
     try {
-      const res = await fetch(`${BACKEND_BASE_URL}/email/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error('Failed to delete email');
+      const res = await fetch(`${BACKEND_BASE_URL}/email/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete email");
 
       // Remove from email list
-      setEmails(prev => prev.filter(email => email.id !== id));
+      setEmails((prev) => prev.filter((email) => email.id !== id));
       setSelectedEmailId(null);
       setEmailDetail(null);
     } catch (err) {
       console.error("Error deleting email:", err);
-      setApiError('Failed to delete email. Please try again.');
+      setApiError("Failed to delete email. Please try again.");
     }
   };
 
@@ -217,17 +253,21 @@ export default function App() {
     setEmailsLoading(true);
 
     try {
-      await fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/refresh`, { method: 'POST' });
+      await fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/refresh`, {
+        method: "POST",
+      });
 
       // reload emails
-      const res = await fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/emails`);
+      const res = await fetch(
+        `${BACKEND_BASE_URL}/inbox/${inbox.uuid}/emails`
+      );
       if (!res.ok) throw new Error("Failed to refresh emails");
 
       const data = await res.json();
       setEmails(data.filter((em: EmailItem) => !em.deleted));
     } catch (err) {
       console.error("Error refreshing inbox:", err);
-      setApiError('Failed to refresh inbox. Please try again.');
+      setApiError("Failed to refresh inbox. Please try again.");
     } finally {
       setEmailsLoading(false);
     }
@@ -239,8 +279,11 @@ export default function App() {
     setApiError(null);
 
     try {
-      const res = await fetch(`${BACKEND_BASE_URL}/inbox/${inbox.uuid}/change`, { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to change email');
+      const res = await fetch(
+        `${BACKEND_BASE_URL}/inbox/${inbox.uuid}/change`,
+        { method: "POST" }
+      );
+      if (!res.ok) throw new Error("Failed to change email");
 
       const data = await res.json();
       console.log("Changed email:", data);
@@ -248,7 +291,7 @@ export default function App() {
       setInbox({
         uuid: data.id,
         address: data.emailAddress,
-        expiresAt: data.expiresAt
+        expiresAt: data.expiresAt,
       });
 
       setEmails([]);
@@ -256,7 +299,7 @@ export default function App() {
       setEmailDetail(null);
     } catch (err) {
       console.error("Error changing email:", err);
-      setApiError('Failed to change email address. Please try again.');
+      setApiError("Failed to change email address. Please try again.");
     }
   };
 
@@ -265,14 +308,18 @@ export default function App() {
       <Card className="w-full max-w-5xl shadow-xl relative">
         <CardHeader className="border-b">
           <div className="flex justify-between items-center">
-            <CardTitle className="text-2xl font-semibold">Temporary Mail</CardTitle>
+            <CardTitle className="text-2xl font-semibold">
+              Temporary Mail
+            </CardTitle>
             <div className="flex items-center gap-2">
               <Switch
                 checked={darkMode}
                 onCheckedChange={setDarkMode}
                 aria-label="Toggle dark mode"
               />
-              <span className="text-xs text-muted-foreground select-none">{darkMode ? "Dark" : "Light"}</span>
+              <span className="text-xs text-muted-foreground select-none">
+                {darkMode ? "Dark" : "Light"}
+              </span>
             </div>
           </div>
         </CardHeader>
@@ -288,10 +335,21 @@ export default function App() {
             </div>
           )}
 
+          {debugApiResult && (
+            <div className="mb-4 p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-md text-xs">
+              <div className="font-medium">Debug Info (API Response):</div>
+              <div className="whitespace-pre-wrap overflow-auto max-h-32">
+                {debugApiResult}
+              </div>
+            </div>
+          )}
+
           {loading && (
             <div className="py-24 flex flex-col items-center justify-center">
               <div className="animate-spin w-10 h-10 border-2 border-zinc-300 border-t-zinc-600 rounded-full"></div>
-              <div className="mt-4 text-zinc-600 dark:text-zinc-400">Creating your temporary inbox...</div>
+              <div className="mt-4 text-zinc-600 dark:text-zinc-400">
+                Creating your temporary inbox...
+              </div>
             </div>
           )}
 
@@ -330,7 +388,9 @@ export default function App() {
                   <div className="h-[400px] flex items-center justify-center text-center text-zinc-500">
                     <div>
                       <div className="text-xl mb-2">No email selected</div>
-                      <p className="text-sm">Click on an email in your inbox to view its contents.</p>
+                      <p className="text-sm">
+                        Click on an email in your inbox to view its contents.
+                      </p>
                     </div>
                   </div>
                 )}

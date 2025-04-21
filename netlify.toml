@@ -1,0 +1,27 @@
+[build]
+  base = "."
+  command = "cd frontend && bun install && bun run build && cd ../functions && bun install"
+  publish = "frontend/dist"
+
+# Proxy API requests to the mock backend during local development
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# Redirect all routes to index.html for SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Setup the functions directory
+[functions]
+  directory = "functions"
+
+# Install dependencies for functions
+[[plugins]]
+  package = "@netlify/plugin-functions-install-core"
+
+[dev]
+  functionsPort = 8888

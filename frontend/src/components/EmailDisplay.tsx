@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
 import { formatDistanceToNow } from "date-fns";
-import { Trash2, Copy } from "lucide-react";
+import { Trash2, Copy, CheckCircle2 } from "lucide-react";
 
 interface EmailDisplayProps {
   id: number;
@@ -63,11 +63,16 @@ export function EmailDisplay({
       return;
     }
 
+    // Fix TypeScript errors by adding extra null checks
     // If we have an expiry time, implement countdown
-    if (otpStatus.expiresAt) {
+    if (otpStatus && otpStatus.expiresAt) {
       function updateCountdown() {
         const now = new Date();
-        const expire = new Date(otpStatus.expiresAt!);
+
+        // Extra null check for TypeScript
+        if (!otpStatus || !otpStatus.expiresAt) return;
+
+        const expire = new Date(otpStatus.expiresAt);
         const diff = Math.max(0, Math.floor((expire.getTime() - now.getTime()) / 1000));
 
         if (diff <= 0) {
@@ -102,6 +107,7 @@ export function EmailDisplay({
     );
   };
 
+  // Process the email content with DOMPurify
   const sanitizedContent =
     otpStatus?.hasOtp && otpStatus?.otp
       ? DOMPurify.sanitize(highlightOtp(content, otpStatus.otp))
@@ -134,6 +140,37 @@ export function EmailDisplay({
 
   const { formatted, relative } = formatDate(receivedAt);
 
+  // Get sender name and domain separately for better display
+  const getSenderInfo = (fromEmail: string) => {
+    // Simple extraction, can be improved for edge cases
+    try {
+      const atIndex = fromEmail.indexOf("@");
+      if (atIndex === -1) return { name: fromEmail, domain: "" };
+
+      let name = fromEmail.substring(0, atIndex);
+      const domain = fromEmail.substring(atIndex + 1);
+
+      // Try to make the name more readable
+      name = name
+        .replace(/\./g, " ")
+        .replace(/-/g, " ")
+        .replace(/_/g, " ")
+        .split(" ")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+
+      if (/^no-?reply/.test(name.toLowerCase())) {
+        name = domain.split(".")[0].charAt(0).toUpperCase() + domain.split(".")[0].slice(1);
+      }
+
+      return { name, domain };
+    } catch (e) {
+      return { name: fromEmail, domain: "" };
+    }
+  };
+
+  const { name: senderName, domain: senderDomain } = getSenderInfo(from);
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex justify-between items-center border-b pb-3 mb-3">
@@ -161,11 +198,21 @@ export function EmailDisplay({
       </div>
 
       <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1 mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded">
-        <div>
-          <span className="font-medium">From:</span> {from}
+        <div className="flex items-center">
+          <span className="font-medium w-16">From:</span>
+          <div>
+            <span className="font-semibold">{senderName}</span>
+            {senderDomain && (
+              <span className="text-gray-500">
+                {" <"}
+                {from}
+                {">"}
+              </span>
+            )}
+          </div>
         </div>
         <div>
-          <span className="font-medium">To:</span> {to}
+          <span className="font-medium w-16">To:</span> {to}
         </div>
         <div className="flex justify-between">
           <div>
@@ -179,8 +226,8 @@ export function EmailDisplay({
         <div
           className={`my-3 p-4 rounded-md text-sm ${
             otpStatus.expired
-              ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
-              : "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+              ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800"
+              : "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800"
           }`}
         >
           <div className="font-medium text-base mb-2">One-Time Password</div>
@@ -188,10 +235,14 @@ export function EmailDisplay({
             <div className="font-mono font-bold text-xl tracking-wide">{otpStatus.otp}</div>
             <button
               onClick={copyOtp}
-              className="p-1 rounded-full hover:bg-green-200 dark:hover:bg-green-800/60 text-green-700 dark:text-green-300"
+              className={`p-1.5 rounded-full ${
+                codeCopied
+                  ? "bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-300"
+                  : "hover:bg-green-200 dark:hover:bg-green-800/60 text-green-700 dark:text-green-300"
+              }`}
               title="Copy to clipboard"
             >
-              <Copy size={16} />
+              {codeCopied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
             </button>
           </div>
           <div
@@ -205,7 +256,7 @@ export function EmailDisplay({
       )}
 
       <div
-        className="flex-grow overflow-auto p-4 rounded bg-white dark:bg-slate-800 my-3 border border-gray-100 dark:border-gray-700 email-content"
+        className="flex-grow overflow-auto p-4 rounded bg-white dark:bg-slate-800 my-3 border border-gray-100 dark:border-gray-700 email-content prose dark:prose-invert prose-sm sm:prose-base max-w-none prose-headings:text-zinc-800 dark:prose-headings:text-zinc-200 prose-p:text-zinc-600 dark:prose-p:text-zinc-300"
         dangerouslySetInnerHTML={{ __html: sanitizedContent }}
       />
 

@@ -1,0 +1,16 @@
+{
+  "name": "temporary-mail",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Temporary Mail Service with Mock Backend",
+  "scripts": {
+    "frontend": "cd frontend && bun run dev",
+    "backend": "cd mock-backend && bun run start",
+    "dev": "bun run backend & bun run frontend",
+    "build": "cd frontend && bun run build"
+  },
+  "dependencies": {
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {}
+}

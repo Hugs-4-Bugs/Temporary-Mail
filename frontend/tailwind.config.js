@@ -71,7 +71,69 @@ module.exports = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
+      typography: (theme) => ({
+        DEFAULT: {
+          css: {
+            maxWidth: 'none',
+            color: theme('colors.zinc.900'),
+            a: {
+              color: theme('colors.blue.600'),
+              '&:hover': {
+                color: theme('colors.blue.700'),
+              },
+            },
+            p: {
+              marginTop: theme('spacing.4'),
+              marginBottom: theme('spacing.4'),
+            },
+            'ul, ol': {
+              paddingLeft: theme('spacing.6'),
+            },
+            pre: {
+              backgroundColor: theme('colors.zinc.100'),
+              color: theme('colors.zinc.800'),
+              padding: theme('spacing.4'),
+              borderRadius: theme('borderRadius.md'),
+              overflowX: 'auto',
+            },
+            code: {
+              color: theme('colors.zinc.800'),
+              backgroundColor: theme('colors.zinc.100'),
+              paddingLeft: theme('spacing.1'),
+              paddingRight: theme('spacing.1'),
+              borderRadius: theme('borderRadius.sm'),
+            },
+            img: {
+              maxWidth: '100%',
+            },
+          },
+        },
+        dark: {
+          css: {
+            color: theme('colors.zinc.300'),
+            a: {
+              color: theme('colors.blue.400'),
+              '&:hover': {
+                color: theme('colors.blue.300'),
+              },
+            },
+            pre: {
+              backgroundColor: theme('colors.zinc.800'),
+              color: theme('colors.zinc.200'),
+            },
+            code: {
+              color: theme('colors.zinc.200'),
+              backgroundColor: theme('colors.zinc.800'),
+            },
+          },
+        },
+      }),
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  plugins: [
+    require("tailwindcss-animate"),
+    require("@tailwindcss/typography")({
+      className: 'prose',
+    }),
+  ],
 }
