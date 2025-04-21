@@ -7,12 +7,36 @@ const app = express();
 const PORT = 8080;
 
 // Middleware
-app.use(cors());
+// Enhanced CORS configuration to allow all origins during development
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(bodyParser.json());
 
 // In-memory database
 const inboxes = {};
 const emails = {};
+
+// Root API endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Temporary Mail API - Use /api endpoints for service functionality',
+    status: 'online',
+    endpoints: {
+      createInbox: 'POST /api/inbox',
+      getInbox: 'GET /api/inbox/:uuid',
+      changeInbox: 'POST /api/inbox/:uuid/change',
+      refreshInbox: 'POST /api/inbox/:uuid/refresh',
+      getEmails: 'GET /api/inbox/:uuid/emails',
+      getEmail: 'GET /api/email/:id',
+      deleteEmail: 'DELETE /api/email/:id',
+      streamUpdates: 'GET /api/inbox/:uuid/stream',
+      otpStatus: 'GET /api/email/:id/otp-status'
+    }
+  });
+});
 
 // Generate a random email
 const generateEmail = (domain = 'tempmail.org') => {

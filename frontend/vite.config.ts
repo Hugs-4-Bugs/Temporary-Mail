@@ -10,6 +10,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    // Copy files from public to build output directory
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+      },
+    },
+  },
   server: {
     host: "0.0.0.0",
     proxy: {
@@ -17,6 +27,7 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true,
         secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '/api'),
         // Log proxy requests for debugging
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {

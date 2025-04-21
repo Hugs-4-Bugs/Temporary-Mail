@@ -63,13 +63,10 @@ export function EmailDisplay({
       return;
     }
 
-    // Fix TypeScript errors by adding extra null checks
-    // If we have an expiry time, implement countdown
     if (otpStatus && otpStatus.expiresAt) {
       function updateCountdown() {
         const now = new Date();
 
-        // Extra null check for TypeScript
         if (!otpStatus || !otpStatus.expiresAt) return;
 
         const expire = new Date(otpStatus.expiresAt);
@@ -90,7 +87,6 @@ export function EmailDisplay({
       const interval = setInterval(updateCountdown, 1000);
       return () => clearInterval(interval);
     } else {
-      // Default to hardcoded 10 minute expiry if no expiry time provided
       setTimeLeft("Valid for 10 minutes");
     }
   }, [otpStatus]);
@@ -99,7 +95,6 @@ export function EmailDisplay({
   const highlightOtp = (content: string, otp?: string) => {
     if (!otp) return content;
 
-    // Simple replace for demonstration
     const regex = new RegExp(`(\\b${otp}\\b)`, "g");
     return content.replace(
       regex,
@@ -107,7 +102,6 @@ export function EmailDisplay({
     );
   };
 
-  // Process the email content with DOMPurify
   const sanitizedContent =
     otpStatus?.hasOtp && otpStatus?.otp
       ? DOMPurify.sanitize(highlightOtp(content, otpStatus.otp))
@@ -140,9 +134,7 @@ export function EmailDisplay({
 
   const { formatted, relative } = formatDate(receivedAt);
 
-  // Get sender name and domain separately for better display
   const getSenderInfo = (fromEmail: string) => {
-    // Simple extraction, can be improved for edge cases
     try {
       const atIndex = fromEmail.indexOf("@");
       if (atIndex === -1) return { name: fromEmail, domain: "" };
@@ -150,7 +142,6 @@ export function EmailDisplay({
       let name = fromEmail.substring(0, atIndex);
       const domain = fromEmail.substring(atIndex + 1);
 
-      // Try to make the name more readable
       name = name
         .replace(/\./g, " ")
         .replace(/-/g, " ")
@@ -241,6 +232,7 @@ export function EmailDisplay({
                   : "hover:bg-green-200 dark:hover:bg-green-800/60 text-green-700 dark:text-green-300"
               }`}
               title="Copy to clipboard"
+              type="button"
             >
               {codeCopied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
             </button>
@@ -265,6 +257,7 @@ export function EmailDisplay({
           className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
           onClick={handleDelete}
           disabled={deleting}
+          type="button"
         >
           <Trash2 size={16} />
           {deleting ? "Deleting..." : "Delete"}
